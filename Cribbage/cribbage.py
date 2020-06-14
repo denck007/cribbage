@@ -5,6 +5,11 @@ import time
 import numpy as np
 from itertools import combinations
 
+cardIdToName = [" A"," 2"," 3"," 4"," 5"," 6"," 7"," 8"," 9"," 10"," J"," Q", " K"]*4
+cardIdToSuite = ["H"]*13
+cardIdToSuite.extend(["D"]*13)
+cardIdToSuite.extend(["C"]*13)
+cardIdToSuite.extend(["S"]*13)
 cardIdToSuite = []
 cardIdToFaceValue = []
 cardIdToCountValue = []
@@ -17,6 +22,18 @@ for cardId in range(52):
     cardIdToFaceValue.append(faceValue)
     cardIdToCountValue.append(countValue)
 
+def printCards(cardIds,showSuite=True):
+    '''
+    Given a list of cardIds, return a string with the face value and optional suite
+    '''
+    out = ""
+    for cardId in cardIds:
+        if showSuite:
+            out += "{:3s}{} ".format(cardIdToName[cardId],cardIdToSuite[cardId])
+        else:
+            out += "{:4s} ".format(cardIdToName[cardId])
+    return out
+    
 class CribbageException(Exception):
     '''
     Base class for cribbage exceptions
@@ -28,7 +45,7 @@ class EndOfGameException(CribbageException):
     Raised when the game is won
     '''
     def __init__(self, winner, winnerScore, looser, looserScore):
-        self.message = "{} defeated {} with a score of {} to {}".format(winner,
+        self.message = "{} defeated {} with a score of {:3d} to {:3d}".format(winner,
                                                                         looser,
                                                                         winnerScore,
                                                                         looserScore)
@@ -94,7 +111,6 @@ class Deck:
             values.append(cardIdToCountValue[cardId])
         return values
 
-
 class Hand:
     '''
     Defines a players hand
@@ -111,8 +127,7 @@ class Hand:
             self.cards = []
         else:
             self.cards = deck.getCards(count=6)
-
-        
+     
 class HandScorer:
     '''
     Returns the score of a hand
@@ -129,17 +144,29 @@ class HandScorer:
         self.useCachePair = useCachePair
         self.useCacheStraight = useCacheStraight
 
-        self.scores = np.empty((52,52,52,52,52),dtype=np.int8)
-        self.scores.fill(-1)
+        if self.useCacheLarge:
+            self.scores = np.empty((52,52,52,52,52),dtype=np.int8)
+            self.scores.fill(-1)
+            self.scores_4card = np.empty((52,52,52,52),dtype=np.int8)
+            self.scores_4card.fill(-1)
 
-        self.scores_15s = np.empty((11,11,11,11,11),dtype=np.int8)
-        self.scores_15s.fill(-1)
+        if self.useCache15:
+            self.scores_15s = np.empty((11,11,11,11,11),dtype=np.int8)
+            self.scores_15s.fill(-1)
+            self.scores_15s_4card = np.empty((11,11,11,11),dtype=np.int8)
+            self.scores_15s_4card.fill(-1)
     
-        self.scores_pairs = np.empty((14,14,14,14,14),dtype=np.int8)
-        self.scores_pairs.fill(-1)
+        if self.useCachePair:
+            self.scores_pairs = np.empty((14,14,14,14,14),dtype=np.int8)
+            self.scores_pairs.fill(-1)
+            self.scores_pairs_4card = np.empty((14,14,14,14),dtype=np.int8)
+            self.scores_pairs_4card.fill(-1)
 
-        self.scores_straight = np.empty((14,14,14,14,14),dtype=np.int8)
-        self.scores_straight.fill(-1)
+        if self.useCacheStraight:
+            self.scores_straight = np.empty((14,14,14,14,14),dtype=np.int8)
+            self.scores_straight.fill(-1)
+            self.scores_straight_4card = np.empty((14,14,14,14),dtype=np.int8)
+            self.scores_straight_4card.fill(-1)
 
     def __call__(self,cardsInHand,turnCard):
         '''
@@ -161,58 +188,96 @@ class HandScorer:
         #print("\n----\nHand: {}\nValue: {}\n----".format(allCards,values))
         
         # first check the cache
-        if self.useCacheLarge:
+        if self.useCacheLarge and (len(allCards) == 5):
             if self.scores.item(*allCards) != -1:
                 return self.scores.item(*allCards)
-        
+        elif self.useCacheLarge and (len(allCards) == 4):
+            if self.scores_4card.item(*allCards) != -1:
+                return self.scores_4card.item(*allCards)
+
         # did not find data in the cache, so compute the score
         score = 0
-        score += self.score15s(allCards)
+        score += self.score15s(cardsInHand,turnCard)
         #print("\n\tScore after 15s:      {}".format(score))
-        score += self.scorePairs(allCards)
+        score += self.scorePairs(cardsInHand,turnCard)
         #print("\tScore after pairs:    {}".format(score))
-        score += self.scoreFlush(allCards)
+        score += self.scoreFlush(cardsInHand,turnCard)
         #print("\tScore after flush:    {}".format(score))
-        score += self.scoreStraight(allCards)
+        score += self.scoreStraight(cardsInHand,turnCard)
         #print("\tScore after straight: {}".format(score))
         score += self.scoreKnobs(cardsInHand,turnCard)
         #print("\tScore after knobs:    {}".format(score))
 
-        self.scores.itemset(*allCards,score)
+        if self.useCacheLarge and (len(allCards) == 5):
+            self.scores.itemset(*allCards,score)
+        elif self.useCacheLarge and (len(allCards) == 4):
+            self.scores_4card.itemset(*allCards,score)
         return score
         
-    def score15s(self,cards):
+    def score15s(self,cardsInHand,turnCard):
         '''
         Count the unique sets of cards that add to 15
-        There are 5 carda availble to make sets from, and it takes at least 2 cards
+        There are 5 (or 4 if turnCard is None) cards availble to make sets from, and it takes at least 2 cards
             to get to 15, so pad the combinations with 3 zeros to allow 2 cards to combine
             as well as all 5 cards to combine to score 15
+        Inputs:
+            * cardsInHand: list of ints of the card ids in the players hand
+            * turnCad: int or None. 
+                * if int is the cardid of the turn card
+                * If scoring just the cards in the players hand, the turn card is None
+        Returns:
+            * int, the score for the hand
         '''
+        values = [cardIdToCountValue[card] for card in cardsInHand]
+        if turnCard is not None: #enable scoring of just cards in hand
+            values.append(cardIdToCountValue[turnCard])
+        values = sorted(values)
         score = 0
-        values = [cardIdToCountValue[card] for card in cards]
-        values = sorted(values) # better cache hits
-        if self.useCache15:
+
+        if self.useCache15 and (len(values) == 5):
             if self.scores_15s.item(*values) != -1: # score in cache
                 return self.scores_15s.item(*values)
+        elif self.useCache15 and (len(values) == 4):
+            if self.scores_15s_4card.item(*values) != -1: # score in cache
+                return self.scores_15s_4card.item(*values)
 
-        for cardsUsed in range(2,6):
+        for cardsUsed in range(2,len(values)+1):
             for item in combinations(values,cardsUsed):
                 total = sum(item)
                 if total == 15:
                     score += 2
-        self.scores_15s.itemset(*values,score)
+
+        if self.useCache15 and len(values) == 5:
+            self.scores_15s.itemset(*values,score)
+        elif self.useCache15 and  len(values) == 4:
+            self.scores_15s_4card.itemset(*values,score)
         return score
 
-    def scorePairs(self,cards):
+    def scorePairs(self,cardsInHand,turnCard):
         '''
         Go through the cards and compute the score for pairs
-        '''
-        values = [cardIdToFaceValue[card] for card in cards]
-        values = sorted(values) # sor so that pairs are always next to eachother
 
-        if self.useCachePair:
+        Inputs:
+            * cardsInHand: list of ints of the card ids in the players hand
+            * turnCad: int or None. 
+                * if int is the cardid of the turn card
+                * If scoring just the cards in the players hand, the turn card is None
+        Returns:
+            * int, the score for the hand
+        '''
+
+        values = [cardIdToFaceValue[card] for card in cardsInHand]
+        if turnCard is not None: #enable scoring of just cards in hand
+            values.append(cardIdToFaceValue[turnCard])
+        values = sorted(values)
+        score = 0
+
+        if self.useCachePair and (len(values) == 5):
             if self.scores_pairs.item(*values) != -1:
                 return self.scores_pairs.item(*values)
+        elif self.useCachePair and (len(values) == 4):
+            if self.scores_pairs_4card.item(*values) != -1:
+                return self.scores_pairs_4card.item(*values)
 
         # not possible to have startIdx == idx and not possible to have 5 of a kind
         scoreForMatchCount = [0,0,2,6,12,None] 
@@ -230,14 +295,28 @@ class HandScorer:
         matchCount = idx - startIdx + 1
         score += scoreForMatchCount[matchCount]
 
-        self.scores_pairs.itemset(*values,score)
+        if self.useCachePair and (len(values) == 5):
+            self.scores_pairs.itemset(*values,score)
+        elif self.useCachePair and (len(values) == 4):
+            self.scores_pairs_4card.itemset(*values,score)
+        
         return score
     
     def scoreKnobs(self,cardsInHand,turnCard):
         '''
         Score 2 points if the player has the jack that matches the suite
             of the turn card
+
+        Inputs:
+            * cardsInHand: list of ints of the card ids in the players hand
+            * turnCad: int or None. 
+                * if int is the cardid of the turn card
+                * If scoring just the cards in the players hand, the turn card is None
+        Returns:
+            * int, the score for the han
         '''
+        if turnCard == None: # enable scoring before turn
+            return 0
         # Go over hand and see if the hand has a jack that matches the suite of the turn        
         for idx, card in enumerate(cardsInHand):
             if cardIdToFaceValue[card] is 11: # is a jack
@@ -245,23 +324,38 @@ class HandScorer:
                     return 1
         return 0
 
-    def scoreFlush(self,cards):
+    def scoreFlush(self,cardsInHand,turnCard):
         '''
         A flush is when all 4 cards in the hand are the same suite
         An additional point for when the turn card is also of the same suite
-        '''
-        suites = [cardIdToSuite[card] for card in cards]
-
-        if suites[0] == suites[1] == suites[2] == suites[3]:
-            score = 4
-            if suites[0] == suites[4]:
-                score += 1
-        else:
-            score = 0
         
+        Inputs:
+            * cardsInHand: list of ints of the card ids in the players hand
+            * turnCad: int or None. 
+                * if int is the cardid of the turn card
+                * If scoring just the cards in the players hand, the turn card is None
+        Returns:
+            * int, the score for the hand
+        '''
+
+        values = [cardIdToSuite[card] for card in cardsInHand]
+        if turnCard is not None: #enable scoring of just cards in hand
+            valueTurnCard = cardIdToSuite[turnCard]
+        else:
+            valueTurnCard = -1 # not possible value
+
+        score = 4
+        for idx in range(len(values)-1):
+            if values[idx] == values[idx+1]:
+                continue
+            else:
+                score = 0 # break the flush, set score to 0
+                break
+        if (score == 4) and (valueTurnCard == values[0]):
+            score += 1 # suite of turn matches suite of hand, so add a point
         return score
 
-    def scoreStraight(self,cards):
+    def scoreStraight(self,cardsInHand,turnCard):
         '''
         Straight is 3 or more multiples in a row
 
@@ -270,16 +364,29 @@ class HandScorer:
             because searching for a run of 4 in a hand that has a run of 5, will find 2 runs of 4
             Likewise it would find 3 runs of 3. However if a run of 3 or 4 exists, want to search
             the rest of the combinations of a specific run length to find double runs
+        Inputs:
+            * cardsInHand: list of ints of the card ids in the players hand
+            * turnCad: int or None. 
+                * if int is the cardid of the turn card
+                * If scoring just the cards in the players hand, the turn card is None
+        Returns:
+            * int, the score for the hand
         '''
-        values = [cardIdToFaceValue[card] for card in cards]
+        values = [cardIdToFaceValue[card] for card in cardsInHand]
+        if turnCard is not None: #enable scoring of just cards in hand
+            values.append(cardIdToFaceValue[turnCard])
         values = sorted(values)
         score = 0
 
-        if self.useCacheStraight:
+        if self.useCacheStraight and (len(values) == 5):
             if self.scores_straight.item(*values) != -1:
                 return self.scores_straight.item(*values)
+        elif self.useCacheStraight and (len(values) == 4):
+            if self.scores_straight_4card.item(*values) != -1:
+                return self.scores_straight_4card.item(*values)
+
         foundRun = False
-        for runLength in range(5,2,-1):
+        for runLength in range(len(values),2,-1):
             for subset in combinations(values,runLength):
                 for idx in range(runLength-1):
                     if (subset[idx] + 1) != (subset[idx+1]):
@@ -289,7 +396,11 @@ class HandScorer:
                     score += runLength
             if foundRun:
                 break
-        self.scores_straight.itemset(*values,score)
+        if self.useCacheStraight and (len(values) == 5):
+            self.scores_straight.itemset(*values,score)
+        elif self.useCacheStraight and (len(values) == 4):
+            self.scores_straight_4card.itemset(*values,score)
+        
         return score
 
 class Player:
@@ -349,7 +460,7 @@ class RandomPlayer(Player):
     def __init__(self,name):
         super().__init__(name)
     
-    def deal(self,deck,isDealer):
+    def deal(self,deck,isDealer,scorer=None):
         '''
         Draw a hand from the deck, then return a random 2 cards for the crib
         '''
@@ -388,16 +499,20 @@ class Game:
         '''
         player<1,2>Type is the type of player, options are:
             * 'random'
-            * 
+            * 'HighestAverageHandPlayer'
         scorer: Instance of a Scorer class. Can pass in one so the cache is primed
         '''
-        if player1Type == "random":
+        if player1Type.lower() == "random":
             self.player1 = RandomPlayer(name=player1Name)
+        elif player1Type.lower() == 'highestaveragehandplayer':
+            self.player1 = HighestAverageHandPlayer(name=player1Name)
         else:
             raise ValueError("Invalid player type {} for player1".format(player1Type))
         
-        if player2Type == "random":
+        if player2Type.lower() == "random":
             self.player2 = RandomPlayer(name=player2Name)
+        elif player2Type.lower() == 'highestaveragehandplayer':
+            self.player2 = HighestAverageHandPlayer(name=player2Name)
         else:
             raise ValueError("Invalid player type {} for player2".format(player1Type))
 
@@ -435,7 +550,7 @@ class Game:
             while not self.gameOver:
                 self.deck.shuffle()
                 self.playHand()
-                print("{} to {}".format(self.player1Score, self.player2Score))
+                #print("{} to {}".format(self.player1Score, self.player2Score))
         except KeyboardInterrupt:
             print("\nExiting the game!")
         except EndOfGameException as e:
@@ -547,8 +662,8 @@ class Game:
 
         Sets the turn card value
         '''
-        player1Crib = self.player1.deal(self.deck,self.player1Dealer)
-        player2Crib = self.player2.deal(self.deck,not self.player1Dealer)
+        player1Crib = self.player1.deal(self.deck,self.player1Dealer,self.handScorer)
+        player2Crib = self.player2.deal(self.deck,not self.player1Dealer,self.handScorer)
 
         self.turnCard = self.deck.getCards(1)[0]
 
@@ -647,7 +762,6 @@ class Game:
         
         return score
         
-
 
 
 
