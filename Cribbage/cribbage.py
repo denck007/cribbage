@@ -6,10 +6,10 @@ import numpy as np
 from itertools import combinations
 
 cardIdToName = [" A"," 2"," 3"," 4"," 5"," 6"," 7"," 8"," 9"," 10"," J"," Q", " K"]*4
-cardIdToSuite = ["H"]*13
-cardIdToSuite.extend(["D"]*13)
-cardIdToSuite.extend(["C"]*13)
-cardIdToSuite.extend(["S"]*13)
+cardIdToSuiteName = ["H"]*13
+cardIdToSuiteName.extend(["D"]*13)
+cardIdToSuiteName.extend(["C"]*13)
+cardIdToSuiteName.extend(["S"]*13)
 cardIdToSuite = []
 cardIdToFaceValue = []
 cardIdToCountValue = []
@@ -29,7 +29,7 @@ def printCards(cardIds,showSuite=True):
     out = ""
     for cardId in cardIds:
         if showSuite:
-            out += "{:3s}{} ".format(cardIdToName[cardId],cardIdToSuite[cardId])
+            out += "{:3s}{} ".format(cardIdToName[cardId],cardIdToSuiteName[cardId])
         else:
             out += "{:4s} ".format(cardIdToName[cardId])
     return out
@@ -505,6 +505,31 @@ class HandScorer:
         scores = [[ii,jj,data[ii,jj]] for ii,jj in zip(idx1,idx2)]
         return scores
 
+    def scorePossible4CardHand(self,hand):
+        '''
+        Given the 6 cards the player is dealt, return a map with the resulting 4 card
+            hand scores where the indicies indicate the dropped cards
+        '''
+
+        scoreMap  = np.zeros((5,6),dtype=np.float32) # cannot have option 5,5 so just ignore it all together. 
+        scoreMap[:] = np.NaN
+        for ii in range(6):
+            for jj in range(ii+1,6):
+                keptHand = hand.copy()
+                keptHand.pop(jj)# jj will always be > ii
+                keptHand.pop(ii)
+                scoreMap[ii,jj] = self(keptHand,None)
+
+        scoreMap = np.ma.masked_invalid(scoreMap)
+        sortedIdxsFlat = np.argsort(scoreMap.flatten())[:-15] # last 15 will always be masked off as np.NaN
+        sortedIdxs = np.unravel_index(sortedIdxsFlat,scoreMap.shape)
+        
+        dropForBestHand = [sortedIdxs[0][-1],sortedIdxs[1][-1],scoreMap[sortedIdxs[0][-1],sortedIdxs[1][-1]]]
+        result = {"dropForBestHand":dropForBestHand,
+                    "scoreMap":scoreMap}
+
+        return result
+
 class Player:
     '''
     Defines a type of player
@@ -589,6 +614,35 @@ class RandomPlayer(Player):
             # unable to play any cards, return None to signal a Go
             return None
 
+class Best4CardHandPlayer(RandomPlayer):
+    '''
+    Player chooses which cards to keep based on keeping the most points in
+        their hand when putting cards into the crib
+    Plays the cards in pegging randomly
+    '''
+
+    def deal(self,deck,isDealer,scorer):
+        '''
+        Draw a hand from the deck, then return a random 2 cards for the crib
+        '''
+        self.hand = deck.getCards(6)
+        result = scorer.scorePossible4CardHand(self.hand)
+        handIdxs = result['dropForBestHand'][:2]
+        
+        # debugging use only
+        self._scorer_output = result
+        self.originalDealtHand = self.hand.copy() # debug use only
+        self.predictedScore = result['dropForBestHand'][-1]
+
+        cardsForCrib = []
+        cardsForCrib.append(self.hand.pop(max(handIdxs)))
+        cardsForCrib.append(self.hand.pop(min(handIdxs)))
+        if isDealer:
+            self.recieveCardsForCrib(cardsForCrib)
+            return None
+        else:
+            return cardsForCrib
+
 class Game:
     '''
     Defines an entire game of cribbage
@@ -606,15 +660,19 @@ class Game:
         '''
         if player1Type.lower() == "random":
             self.player1 = RandomPlayer(name=player1Name)
-        elif player1Type.lower() == 'highestaveragehandplayer':
-            self.player1 = HighestAverageHandPlayer(name=player1Name)
+        #elif player1Type.lower() == 'highestaveragehandplayer':
+        #    self.player1 = HighestAverageHandPlayer(name=player1Name)
+        elif player1Type.lower() == 'best4cardhandplayer':
+            self.player1 = Best4CardHandPlayer(name=player1Name)
         else:
             raise ValueError("Invalid player type {} for player1".format(player1Type))
         
         if player2Type.lower() == "random":
             self.player2 = RandomPlayer(name=player2Name)
-        elif player2Type.lower() == 'highestaveragehandplayer':
-            self.player2 = HighestAverageHandPlayer(name=player2Name)
+        #elif player2Type.lower() == 'highestaveragehandplayer':
+        #    self.player2 = HighestAverageHandPlayer(name=player2Name)
+        elif player2Type.lower() == 'best4cardhandplayer':
+            self.player2 = Best4CardHandPlayer(name=player2Name)
         else:
             raise ValueError("Invalid player type {} for player2".format(player1Type))
 
@@ -713,6 +771,7 @@ class Game:
         # Dealer always counts first
         
         if self.player1Dealer:
+            #player1StartingScore = self.player1Score # debugging use only
             self.player1Score += self.handScorer(self.player1.hand, self.turnCard)
             self._checkGameOver()
             self.player2Score += self.handScorer(self.player2.hand, self.turnCard)
@@ -720,12 +779,29 @@ class Game:
             self.player1Score += self.handScorer(self.player1.crib, self.turnCard)
             self._checkGameOver()
         else:
+            #player1StartingScore = self.player1Score #debugging use only
             self.player2Score += self.handScorer(self.player2.hand, self.turnCard)
             self._checkGameOver()
             self.player1Score += self.handScorer(self.player1.hand, self.turnCard)
             self._checkGameOver()
             self.player2Score += self.handScorer(self.player2.crib, self.turnCard)
             self._checkGameOver()
+
+        '''
+        # Useful for debugging players
+        scored = self.player1Score-player1StartingScore
+        print("\tPlayer 1 expected {} scored {}".format(self.player1.predictedScore,scored))
+        if self.player1.predictedScore > scored:
+            print("Original hand: {}\n\tcardIds: {}".format(printCards(self.player1.originalDealtHand),self.player1.originalDealtHand))
+            print("Hand Ids: {} Turn Id: {}".format(self.player1.hand,self.turnCard))
+            
+            print("Scorer output from when hand was chosen")
+            for key in self.player1._scorer_output:
+                print("{}\n{}".format(key,self.player1._scorer_output[key]))
+            print("")
+            raise ValueError("\nExpected minimum score of {}, scored {}\n".format(self.player1.predictedScore,scored) + \
+                "Hand: {} Turn {}\n\n".format(printCards(self.player1.hand),printCards([self.turnCard])))
+        '''
 
     def _resetHands(self):
         '''

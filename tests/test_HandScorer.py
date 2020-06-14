@@ -130,6 +130,7 @@ class test_HandScorer(TestCase):
             [[2,9,18,3],23,0], # test_Game.test_playHand, Hand #2, player 1 hand
             [[1,10,5,4],23,10], # test_Game.test_playHand, Hand #2, player 2 hand
             [[12,24,9,0],23,4],# test_Game.test_playHand, Hand #2, player 2 crib
+            [[26, 51, 49, 20],47,1], # A clubs, K spades,J spades, 8 diamonds turn 9 spades - 1 for knees
         ]
 
         for case in cases:
@@ -155,3 +156,22 @@ class test_HandScorer(TestCase):
         self.assertEqual(result[2,4,2+13*2],10)
         self.assertEqual(result[2,4,2+13*3],10)
 
+    def test_scorePossible4CardHand(self):
+        '''
+        A player is dealt 6 cards, this mechanism finds the scores of every combination of
+            cards put to the crib. 
+        '''
+    
+
+        scorer = HandScorer()
+        # [[cards in hand], score]
+        cases = [[[6, 39, 47, 24, 13, 14],2], # 7 H,  A S,  9 S,  Q D,  A D,  2 D  - pair of A for 2
+                ]
+            
+        for case in cases:
+            cardsDealt,maxScoreCorrect = case
+            result = scorer.scorePossible4CardHand(cardsDealt)
+            scoreMap = result['scoreMap']
+            maxScore = max(scoreMap)
+
+            self.assertEqual(maxScore,maxScoreCorrect,msg="predicted max {} correct max {} with hand".format(score,scoreCorrect,cardsDealt))
