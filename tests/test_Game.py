@@ -1,5 +1,7 @@
 from unittest import TestCase
-from Cribbage.cribbage import Game, cardIdToFaceValue, EndOfGameException
+from Cribbage import Game
+from Cribbage.Exceptions import EndOfGameException
+from Cribbage.cribbage import cardIdToFaceValue
 
 class test_Game(TestCase):
     '''

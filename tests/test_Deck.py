@@ -1,5 +1,5 @@
 from unittest import TestCase
-from Cribbage.cribbage import Deck, Hand, HandScorer
+from Cribbage import Deck, HandScorer
 import numpy as np
 
 class test_Deck(TestCase):

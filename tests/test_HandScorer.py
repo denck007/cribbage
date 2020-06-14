@@ -1,5 +1,6 @@
 from unittest import TestCase
-from Cribbage.cribbage import HandScorer, cardIdToFaceValue
+from Cribbage import HandScorer
+from Cribbage.cribbage import cardIdToFaceValue
 import numpy as np
 
 class test_HandScorer(TestCase):
@@ -172,6 +173,6 @@ class test_HandScorer(TestCase):
             cardsDealt,maxScoreCorrect = case
             result = scorer.scorePossible4CardHand(cardsDealt)
             scoreMap = result['scoreMap']
-            maxScore = max(scoreMap)
+            maxScore = scoreMap.max()
 
-            self.assertEqual(maxScore,maxScoreCorrect,msg="predicted max {} correct max {} with hand".format(score,scoreCorrect,cardsDealt))
+            self.assertEqual(maxScore,maxScoreCorrect,msg="predicted max {} correct max {} with hand {}".format(maxScore,maxScoreCorrect,cardsDealt))
