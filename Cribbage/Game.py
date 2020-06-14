@@ -3,7 +3,7 @@ import sys
 
 from Cribbage import HandScorer, Deck
 from Cribbage.Exceptions import EndOfGameException
-from Cribbage.Players import RandomPlayer, Best4CardHandPlayer
+from Cribbage.Players import RandomPlayer, Best4CardHandPlayer,BestMinimalScorePlayer
 from Cribbage.cribbage import cardIdToCountValue,cardIdToFaceValue, cardIdToSuiteName
 
 class Game:
@@ -23,8 +23,8 @@ class Game:
         '''
         if player1Type.lower() == "random":
             self.player1 = RandomPlayer(name=player1Name)
-        #elif player1Type.lower() == 'highestaveragehandplayer':
-        #    self.player1 = HighestAverageHandPlayer(name=player1Name)
+        elif player1Type.lower() == 'bestminimalscoreplayer':
+            self.player1 = BestMinimalScorePlayer(name=player1Name)
         elif player1Type.lower() == 'best4cardhandplayer':
             self.player1 = Best4CardHandPlayer(name=player1Name)
         else:
@@ -32,8 +32,8 @@ class Game:
         
         if player2Type.lower() == "random":
             self.player2 = RandomPlayer(name=player2Name)
-        #elif player2Type.lower() == 'highestaveragehandplayer':
-        #    self.player2 = HighestAverageHandPlayer(name=player2Name)
+        elif player2Type.lower() == 'bestminimalscoreplayer':
+            self.player2 = BestMinimalScorePlayer(name=player2Name)
         elif player2Type.lower() == 'best4cardhandplayer':
             self.player2 = Best4CardHandPlayer(name=player2Name)
         else:

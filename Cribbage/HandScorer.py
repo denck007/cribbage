@@ -277,108 +277,6 @@ class HandScorer:
         
         return score
 
-    def potentialScoreMap(self,hand):
-        '''
-        Score the possible outcomes of a raw hand (ie the 6 cards before the turn card is selected)
-        Iterates over all possible turn card and card drop combinations and scores each one
-
-        Returns an np.array of shape (6,6,52) with dtype np.float32 where
-            * first index is id in the hand of the first card added to the crib
-            * second index is id in the hand of the second card added to the crib
-            * Third index is the possible turn card
-            * Value at these indicies is the score for the resulting hand
-        
-        So if hand (with card ids) [1,3,4,5,6,0], the score at (0,1,9) is the score of the hand
-            where handIdx cards 0 and 1 are dropped (card ids 1,3) and a turn cardId of 9
-            Referencing result[0,1:] is all the possible outcomes of the hand. 
-            Locations where the result is not posible (ex index (0,1,4) which has a turn card that
-                is in the hand, or (0,0,9)) will have a value of np.NaN
-        '''
-        result = np.zeros((5,6,52),dtype=np.float32) # cannot have option 5,5 so just ignore it all together. 
-        result[:] = np.NaN
-        for ii in range(6):
-            for jj in range(ii+1,6):
-                keptHand = hand.copy()
-                keptHand.pop(jj)# jj will always be > ii
-                keptHand.pop(ii)
-                #s = "\t"
-                #for card in keptHand:
-                #    s += "{:2}{}".format(cardIdToName[card],cardIdToSuite[card])
-                #print(s)
-
-                for turn in range(52):
-                    if turn in hand:
-                        continue # cant turn a card that is in the hand
-                    result[ii,jj,turn] = self(keptHand,turn)
-                    #print("\t\tTurn: {:2} {} Projected Score: {}".format(cardIdToName[turn],cardIdToSuite[turn],result[ii,jj,turn]))
-        return result
-
-    def potentialScoreStats(self,hand,topK=3,returnScoreMap=False):
-        '''
-        Takes in the raw 6 card hand (before cards are added to crib) and returns a dictonary
-            listing the best drop cards for various stats
-
-        Returns:
-            * Dictonary with keys:
-                * maxScore: [[dropCardIdx,dropCardIdx,score],...<repeats for topK scores>...]
-                * expectedScore: [[dropCardIdx,dropCardIdx, average of all the possible scores],...<repeats for topK averages scores>...]
-                * scoreMap: if returnScoreMap then is the result of self.potentialScoreMap(), otherwise None
-        '''
-        result = {'maxScore':[],
-                    'expectedScore':[],
-                    'scoreMap':None,
-                    }
-        
-        scoreMap = self.potentialScoreMap(hand)
-        scores = np.ma.masked_invalid(scoreMap)
-
-        maxScores = scores.max(axis=-1)
-        minScores = scores.min(axis=-1)
-        expected = scores.mean(axis=-1)
-        std = np.std(scores,axis=-1)
-        maxExpected = expected + std
-        minExpected = expected - std
-
-        print("maxScores:")
-        print(maxScores.astype(np.int32))
-        #print("\nexpected:")
-        #print(expected.astype(np.int32))
-        #print("\nmaxnExpected:")
-        #print(maxExpected.astype(np.int32))
-        #print("\nminExpected:")
-        #print(minExpected.astype(np.int32))
-        # Want to return the worst performing cards, soo findMax=False
-        result['maxScores'] = self._getMax(maxScores,topK,findMax=False)
-        result['minScores'] = self._getMax(minScores,topK,findMax=False)
-        result['expected'] = self._getMax(expected,topK,findMax=False)
-        result['maxExpected'] = self._getMax(maxExpected,topK,findMax=True)
-        result['minExpected'] = self._getMax(minExpected,topK,findMax=True)
-        if returnScoreMap:
-            result['scoreMap'] = scores
-
-        print("maxScores: {}".format(result['maxScores']))
-
-        return result
-
-    def _getMax(self,data,topK,findMax=True):
-        '''
-        Returns a list of lists containing the card in hand indicies and the related score
-        If findMax is True, it will return the indicies of the maxmimum values
-            if it is False, it will return the indicies of the minimum values
-
-        Takes in an nxm array
-        '''
-
-        sortedIndicies = np.unravel_index(np.argsort(data.flatten()),data.shape)
-        if findMax:
-            idx1 = sortedIndicies[0][-topK:][::-1]
-            idx2 = sortedIndicies[1][-topK:][::-1]
-        else:
-            idx1 = sortedIndicies[0][:topK]
-            idx2 = sortedIndicies[1][:topK]
-        scores = [[ii,jj,data[ii,jj]] for ii,jj in zip(idx1,idx2)]
-        return scores
-
     def scorePossible4CardHand(self,hand):
         '''
         Given the 6 cards the player is dealt, return a map with the resulting 4 card
@@ -404,3 +302,30 @@ class HandScorer:
 
         return result
 
+    def scorePossible5CardHand(self,hand):
+        '''
+        Given the 6 cards the player is dealt, return a map with the resulting 4 card hand scores
+            where the first 2 indicies indicate the dropped cards and the 3rd references the
+            possible turn card
+        ''' 
+        scoreMap  = np.zeros((5,6,52),dtype=np.float32) # cannot have option 5,5 so just ignore it all together. 
+        scoreMap[:] = np.NaN
+        for ii in range(6):
+            for jj in range(ii+1,6):
+                keptHand = hand.copy()
+                keptHand.pop(jj)# jj will always be > ii
+                keptHand.pop(ii)
+                for turnCardId in range(52):
+                    if turnCardId in hand:
+                        continue
+                    scoreMap[ii,jj,turnCardId] = self(keptHand,turnCardId)
+
+        scoreMap = np.ma.masked_invalid(scoreMap)
+        mins = scoreMap.min(axis=-1)
+        sortedIdxsFlat = np.argsort(mins.flatten())[:-15] # last 15 will always be masked off as np.NaN
+        sortedIdxs = np.unravel_index(sortedIdxsFlat,mins.shape)
+
+        dropForBestHand = [sortedIdxs[0][-1],sortedIdxs[1][-1],scoreMap[sortedIdxs[0][-1],sortedIdxs[1][-1]]]
+        result = {"dropForBestHand":dropForBestHand,
+                    "scoreMap":scoreMap}
+        return result

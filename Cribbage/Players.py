@@ -113,3 +113,30 @@ class Best4CardHandPlayer(RandomPlayer):
         else:
             return cardsForCrib
 
+class BestMinimalScorePlayer(RandomPlayer):
+    '''
+    Player starts by finding the best 4 cards to keep without consideration for the turn card.
+        Then they find the hand that has a minimual improvement over this 4 card hand.
+        The idea is that the worst case is a hand that matches the Best4CardHandPlayer.
+
+    In reality this is choosing to keep the hand with the highest minimum score.
+    '''
+    def deal(self,deck,isDealer,scorer):
+        self.hand = deck.getCards(6)
+
+        result = scorer.scorePossible5CardHand(self.hand)
+        handIdxs = result['dropForBestHand'][:2]
+        
+        # debugging use only
+        self._scorer_output = result
+        self.originalDealtHand = self.hand.copy() # debug use only
+        self.predictedScore = result['dropForBestHand'][-1]
+
+        cardsForCrib = []
+        cardsForCrib.append(self.hand.pop(max(handIdxs)))
+        cardsForCrib.append(self.hand.pop(min(handIdxs)))
+        if isDealer:
+            self.recieveCardsForCrib(cardsForCrib)
+            return None
+        else:
+            return cardsForCrib
