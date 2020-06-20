@@ -13,7 +13,7 @@ if __name__ == "__main__":
     player1Wins = 0
     for ii in range(gamesToPlay):
         handTime = time.time()
-        game = Game("besthandandcrib","besthandandcribandscorepegging",scorer=scorer,verbose=False)
+        game = Game("random","BestMinimalHandAndScorePegging",scorer=scorer,verbose=False)
         game.playGame()
         if game.player1Score > game.player2Score:
             player1Wins += 1

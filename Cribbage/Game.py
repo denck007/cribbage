@@ -3,7 +3,7 @@ import sys
 
 from Cribbage import HandScorer, Deck
 from Cribbage.Exceptions import EndOfGameException
-from Cribbage.Players import RandomPlayer, Best4CardHandPlayer,BestMinimalScorePlayer, BestHandAndCribPlayer, ScorePeggingPlayer, BestHandAndCribAndScorePeggingPlayer
+from Cribbage.Players import RandomPlayer, Best4CardHandPlayer,BestMinimalScorePlayer, BestHandAndCribPlayer, ScorePeggingPlayer, BestHandAndCribAndScorePeggingPlayer, BestMinimalHandAndScorePeggingPlayer
 from Cribbage.cribbage import cardIdToCountValue,cardIdToFaceValue, cardIdToSuiteName
 
 class Game:
@@ -24,9 +24,9 @@ class Game:
         '''
         if player1Type.lower() == "random":
             self.player1 = RandomPlayer(name=player1Name)
-        elif player1Type.lower() == 'bestminimalscoreplayer':
+        elif player1Type.lower() == 'bestminimalscore':
             self.player1 = BestMinimalScorePlayer(name=player1Name)
-        elif player1Type.lower() == 'best4cardhandplayer':
+        elif player1Type.lower() == 'best4cardhand':
             self.player1 = Best4CardHandPlayer(name=player1Name)
         elif player1Type.lower() == 'besthandandcrib':
             self.player1 = BestHandAndCribPlayer(name=player1Name)
@@ -34,14 +34,16 @@ class Game:
             self.player1 = ScorePeggingPlayer(name=player1Name)
         elif player1Type.lower() == 'besthandandcribandscorepegging':
             self.player1 = BestHandAndCribAndScorePeggingPlayer(name=player1Name)
+        elif player1Type.lower() == 'bestminimalhandandscorepegging':
+            self.player1 = BestMinimalHandAndScorePeggingPlayer(name=player1Name)
         else:
             raise ValueError("Invalid player type {} for player1".format(player1Type))
         
         if player2Type.lower() == "random":
             self.player2 = RandomPlayer(name=player2Name)
-        elif player2Type.lower() == 'bestminimalscoreplayer':
+        elif player2Type.lower() == 'bestminimalscore':
             self.player2 = BestMinimalScorePlayer(name=player2Name)
-        elif player2Type.lower() == 'best4cardhandplayer':
+        elif player2Type.lower() == 'best4cardhand':
             self.player2 = Best4CardHandPlayer(name=player2Name)
         elif player2Type.lower() == 'besthandandcrib':
             self.player2 = BestHandAndCribPlayer(name=player2Name)
@@ -49,6 +51,8 @@ class Game:
             self.player2 = ScorePeggingPlayer(name=player2Name)
         elif player2Type.lower() == 'besthandandcribandscorepegging':
             self.player2 = BestHandAndCribAndScorePeggingPlayer(name=player2Name)
+        elif player2Type.lower() == 'bestminimalhandandscorepegging':
+            self.player2 = BestMinimalHandAndScorePeggingPlayer(name=player2Name)
         else:
             raise ValueError("Invalid player type {} for player2".format(player2Type))
 

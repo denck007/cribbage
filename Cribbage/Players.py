@@ -285,7 +285,13 @@ class ScorePeggingPlayer(RandomPlayer):
         self.cardsPlayedMask[idx] = True # mark as played
         return self.hand[idx]
 
-class BestHandAndCribAndScorePeggingPlayer(RandomPlayer):
+class BestHandAndCribAndScorePeggingPlayer(BestHandAndCribPlayer,ScorePeggingPlayer):
+    '''
+    Combines the ScorePegging player and the BestHandAndCrib player
+    '''
+    pass
+
+class BestMinimalHandAndScorePeggingPlayer(BestMinimalScorePlayer,ScorePeggingPlayer):
     '''
     Combines the ScorePegging player and the BestMinimalScorePlayer
     '''
@@ -315,8 +321,6 @@ class BestHandAndCribAndScorePeggingPlayer(RandomPlayer):
         Try to score the most points possible, so the order is 4 of a kind, largest possible straight, 3 of a kind, other straights, 15s, 31, then pairs
         '''
         valuesFacePlayed = [cardIdToFaceValue[cardId] for cardId in cardsPlayed][::-1] # want the order reversed to make it easier to iterate through
-        #valuesFaceHand = [] # list of the face values in the hand that can be played
-        #valuesCountHand = [] # list of the count values in the hand that can be played
         valuesFaceHandToIdxInHand = {} # map face value (number represeting numeric or J/Q/K/A) to index in hand
         valuesCountHandToIdxInHand = {} # map count value (A=1, J/Q/K=10) to index in hand
         for idx, cardId in enumerate(self.hand):
@@ -327,8 +331,6 @@ class BestHandAndCribAndScorePeggingPlayer(RandomPlayer):
             elif valueCount + cardsTotal > 31: # cannot play card
                 continue
             else:
-                #valuesFaceHand.append(valueFace)
-                #valuesCountHand.append(valueCount)
                 valuesFaceHandToIdxInHand[valueFace] = cardId
                 valuesCountHandToIdxInHand[valueCount] = cardId
             
