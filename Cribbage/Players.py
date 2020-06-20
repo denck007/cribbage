@@ -81,8 +81,8 @@ class RandomPlayer(Player):
                 self.cardsPlayedMask[idx] = True
                 return self.hand[idx]
             
-            # unable to play any cards, return None to signal a Go
-            return None
+        # unable to play any cards, return None to signal a Go
+        return None
 
 class Best4CardHandPlayer(RandomPlayer):
     '''
