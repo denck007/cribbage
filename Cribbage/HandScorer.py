@@ -322,10 +322,53 @@ class HandScorer:
 
         scoreMap = np.ma.masked_invalid(scoreMap)
         mins = scoreMap.min(axis=-1)
+        maxs = scoreMap.max(axis=-1)
         sortedIdxsFlat = np.argsort(mins.flatten())[:-15] # last 15 will always be masked off as np.NaN
         sortedIdxs = np.unravel_index(sortedIdxsFlat,mins.shape)
 
         dropForBestHand = [sortedIdxs[0][-1],sortedIdxs[1][-1],scoreMap[sortedIdxs[0][-1],sortedIdxs[1][-1]]]
         result = {"dropForBestHand":dropForBestHand,
+                    "mins":mins,
+                    "maxs":maxs,
                     "scoreMap":scoreMap}
         return result
+
+    def scorePossibleCribHands(self,hand):
+        '''
+        Given a 6 card hand, find the scores of the possible crib hands
+        Does not count the turn card in with the crib
+        '''
+        scoreMap  = np.zeros((5,6,52,52),dtype=np.float32) # cannot have option 5,5 so just ignore it all together. 
+        scoreMap[:] = np.NaN
+        for ii in range(6):
+            for jj in range(ii+1,6):
+                keptHand = hand.copy()
+                toCrib = []
+                toCrib.append(keptHand.pop(jj))# jj will always be > ii
+                toCrib.append(keptHand.pop(ii))
+                for cribCard1Id in range(52):
+                    if cribCard1Id in hand:
+                        continue
+                    for cribCard2Id in range(cribCard1Id+1,52):
+                        if cribCard2Id in hand:
+                            continue
+                        scoreMap[ii,jj,cribCard1Id,cribCard2Id] = self(toCrib + [cribCard1Id,cribCard2Id],None)
+
+        scoreMap = np.ma.masked_invalid(scoreMap)
+        mins = scoreMap.min(axis=(-2,-1))
+        maxs = scoreMap.max(axis=(-2,-1))
+
+        sortedIdxsFlat = np.argsort(mins.flatten())[:-15] # last 15 will always be masked off as np.NaN
+        sortedIdxs = np.unravel_index(sortedIdxsFlat,mins.shape)
+
+        result = {"mins":mins,
+                    "maxs":maxs,
+                    "scoreMap":scoreMap}
+
+        return result
+
+
+
+
+
+
